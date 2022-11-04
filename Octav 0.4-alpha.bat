@@ -30,7 +30,7 @@ echo						4 - Workstations issues
 echo.
 echo						5 - Windows tools
 echo.
-echo						6 - Workstation tools
+echo						6 - Workstation  
 echo          		 -----------------------------------------------------------------
 echo.
 
@@ -391,6 +391,7 @@ echo This feature is not implemented yet, will be done soon.
 goto menu_start
 
 :synchanchors
+SET currentpath=%cd%
 ECHO Note, this procedure will enable the datastoredb SQL user and set a temporary password [datastoredb], once Simphony is started, it will fetch the database credentials set as in EMC.
 net stop mssql$SQLEXPRESS
 net start mssql$SQLEXPRESS /m
@@ -405,6 +406,13 @@ echo ^<db alias="DCALService" dbType="sqlserver" dataSource="localhost\SQLEXPRES
 echo ^<db alias="CMLocal" dbType="sqlserver" dataSource="localhost\SQLEXPRESS" catalog="MCRSCM" uid="datastoredb" pwd="datastoredb" replaceviews="TRUE" /^> >> DbSettings.xml
 echo ^<db alias="Master" dbType="sqlserver" dataSource="localhost\SQLEXPRESS" catalog="Master" uid="sa" pwd="datastoredb" replaceviews="TRUE" /^> >> DbSettings.xml
 echo ^</root^> >> DbSettings.xml
+cd C:\Micros\Simphony\WebServer\wwwroot\EGateway\
+ren DbSettings.xml DbSettings.xml.syncanchors
+move %currentpath%\DbSettings.xml C:\Micros\Simphony\WebServer\wwwroot\EGateway\
+echo Renamed old dbsettings to dbsettings.xml.syncanchors
+echo Moved new dbsettings.xml from %currentpath% to C:\Micros\Simphony\WebServer\wwwroot\EGateway\
+echo Press any key to go back to the main menu of the script
+pause >nul
 goto menu_start
 
 
@@ -554,12 +562,12 @@ goto Windowstools
 
 
 :disablefirewall
-::inprogress
-
-
-
-
+netsh advfirewall set allprofiles state off
 goto Windowstools
+
+
+
+
 :disablefirewallnotification 
 ::in progress..
 [HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Windows]
@@ -585,11 +593,11 @@ echo Notification set to off.
 goto Windowstools
 
 :UACdown
-::inprogress
-
-
-
+reg ADD HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System /v EnableLUA /t REG_DWORD /d 0 /f
+ECHO UAC set to off, you might need to restart the device for settings to fully apply
+pause
 goto Windowstools
+
 
 :viewEgateway
 echo Opening last Egateway log file..
@@ -630,7 +638,7 @@ goto Windowstools
 
 :viewHostsfile
 echo Opening last Egateway log file..
-start notepad "C:\Windows\System32\drivers\etc\hotsts"
+start notepad "C:\Windows\System32\drivers\etc\hosts"
 pause
 goto Windowstools
 
@@ -684,19 +692,47 @@ goto DatabaseTools
 
 
 :WorkstationTools
-::inprogress
+echo.
+echo    Windows Tools
+echo.
+echo           -----------------------------------------------------------------
+echo.
+echo      1 - View workstations details Property, ip, hostname, subnet, gateway
+echo.
+echo      2 - View all printers on site
+echo.
+echo      3 - View Employees information
+echo.
+echo           -----------------------------------------------------------------
+set /p wintoolschoice="Select option: "
+if '%wintoolschoice%'=='1' goto FindWorkstationsInfo
+if '%wintoolschoice%'=='2' goto findALLPrinters
+if '%wintoolschoice%'=='3' goto FindEmployeesInfo
 
 
 :findALLPrinters
-::inprogress
-
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS /m
+sqlcmd -S localhost\SQLEXPRESS -Q "select string_table.StringText as PrinterName, printer.connectionString as PrinterType, printer.configurationstring as PrinterDetails, service_host.hostname as PrintControllerIP, str.stringtext as PrintControllerHostname from datastore.dbo.string_table string_table join datastore.dbo.printer printer on string_table.stringnumberid = printer.nameid join datastore.dbo.service service on printer.serviceid = service.serviceid join datastore.dbo.service_host service_host on service.servicehostid = service_host.servicehostid join datastore.dbo.string_table str on service_host.nameid = str.stringnumberid" -W
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS
+pause
+goto WorkstationTools
 
 :FindEmployeesInfo
-::inprogress
-
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS /m
+sqlcmd -S localhost\SQLEXPRESS -Q "select e.username, e.firstname, e.lastname, e.idnumber as SimphonyCode, string_table.Stringtext as RoleName  from datastore.dbo.employee e join datastore.dbo.role_employee er on e.employeeid = er.employeeid join datastore.dbo.role role_table on er.roleid = role_table.roleid join datastore.dbo.string_table string_table on string_table.stringnumberid = role_table.nameid" -W -s "█"
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS
+pause
+goto WorkstationTools
 
 :FindWorkstationsInfo
-::inprogress
-
-
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS /m
+sqlcmd -S localhost\SQLEXPRESS -Q "select st2.stringtext 'Property', st.StringText 'WS Name',  sh.HostName 'WS IP Address/Hostname',  sh.NetMask 'WS Subnet', sh.DefaultGateway 'WS Default Gateway', st3.stringtext 'RevenueCenters' from datastore.dbo.WORKSTATION ws join datastore.dbo.SERVICE s on ws.ServiceID = s.ServiceID join datastore.dbo.SERVICE_HOST sh on s.ServiceHostID = sh.ServiceHostID join datastore.dbo.string_table st on sh.NameID = st.stringnumberid join datastore.dbo.HIERARCHY_STRUCTURE hs on ws.HierStrucID = hs.HierStrucID join datastore.dbo.HIERARCHY_UNIT hu on hs.HierUnitID = hu.HierUnitID join datastore.dbo.string_table st2 on hu.NameID = st2.stringnumberid join datastore.dbo.WORKSTATION_REV_CTR_TOUCHSCRN wrct  on ws.WorkstationID = wrct.WorkstationID join datastore.dbo.HIERARCHY_UNIT hu2 on hu2.RevCtrID = wrct.RevCtrID join datastore.dbo.STRING_TABLE st3 on hu2.NameID = st3.StringNumberID" -W
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS
 Pause
+goto WorkstationTools
