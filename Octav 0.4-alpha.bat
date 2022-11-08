@@ -703,11 +703,14 @@ echo      2 - View all printers on site
 echo.
 echo      3 - View Employees information
 echo.
+echo      4 - Find Interfaces information
+echo.
 echo           -----------------------------------------------------------------
 set /p wintoolschoice="Select option: "
 if '%wintoolschoice%'=='1' goto FindWorkstationsInfo
 if '%wintoolschoice%'=='2' goto findALLPrinters
 if '%wintoolschoice%'=='3' goto FindEmployeesInfo
+if '%wintoolschoice%'=='4' goto FindInterfacesInfo
 
 
 :findALLPrinters
@@ -722,7 +725,7 @@ goto WorkstationTools
 :FindEmployeesInfo
 net stop mssql$SQLEXPRESS
 net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "select e.username, e.firstname, e.lastname, e.idnumber as SimphonyCode, string_table.Stringtext as RoleName  from datastore.dbo.employee e join datastore.dbo.role_employee er on e.employeeid = er.employeeid join datastore.dbo.role role_table on er.roleid = role_table.roleid join datastore.dbo.string_table string_table on string_table.stringnumberid = role_table.nameid" -W -s "█"
+sqlcmd -S localhost\SQLEXPRESS -Q "select e.username, e.firstname, e.lastname, e.idnumber as SimphonyCode, string_table.Stringtext as RoleName  from datastore.dbo.employee e join datastore.dbo.role_employee er on e.employeeid = er.employeeid join datastore.dbo.role role_table on er.roleid = role_table.roleid join datastore.dbo.string_table string_table on string_table.stringnumberid = role_table.nameid" -W -s "|"
 net stop mssql$SQLEXPRESS
 net start mssql$SQLEXPRESS
 pause
@@ -735,4 +738,11 @@ sqlcmd -S localhost\SQLEXPRESS -Q "select st2.stringtext 'Property', st.StringTe
 net stop mssql$SQLEXPRESS
 net start mssql$SQLEXPRESS
 Pause
+goto WorkstationTools
+
+:FindInterfacesInfo
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS /m
+sqlcmd -S localhost\SQLEXPRESS -Q "select interface.interfaceid, interface.timeout as TIMEOUT, interface.tcphost as IP, interface.tcpport as PORT, interface.interfacetype as TYPE, string_table.stringtext as NAME, service_host.hostname as Controller from datastore.dbo.Interface interface join datastore.dbo.string_table string_table on interface.nameid = string_table.stringnumberid join datastore.dbo.Service service on interface.serviceid = service.serviceid join datastore.dbo.Service_host service_host on service.servicehostid = service_host.servicehostid" -W -s "|"
+pause
 goto WorkstationTools
