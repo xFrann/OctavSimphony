@@ -2,36 +2,161 @@
 @title   OCTAV - Simphony problem solver assistant
 setlocal EnableDelayedExpansion
 FOR /F "delims=: tokens=2" %%a in ('ipconfig ^| find "IPv4"') do set _IPAddress=%%a
+
+::  SEE SQL Path & Various paths are hardcoded #1
+::  https://github.com/xFrann/OctavSimphony/issues/1
+::
+::  Various SQL Directories and Simphony path are hardcoded in batch, 
+::  meaning if Simphony or SQL is installed under a different drive or 
+::  has the version number in the directory name, functions that use those paths will not work.
+::  Paths need to be fetched from environment variables or registry.
+
 SET sqlpath=C:\Program Files (x86)\Microsoft SQL Server\MSSQL11.SQLEXPRESS\MSSQL\
 SET SQLLOG=C:\Program Files\Microsoft SQL Server\MSSQL11.SQLEXPRESS\MSSQL\Log
 color 0C
+SET separator="-----------------------------------------------------------------"
 
+:loginoption
+echo        SQL Login Options
+echo.
+echo %separator%
+echo.
+echo         1. Username and Password provided by customer
+echo.
+echo         2. Temporary Credentials (Please note this will close and reopen ServiceHost)
+echo.
+echo         3. Single User Mode (Simphony closed until end of tool usage)
+echo.
+echo %separator%
+echo.
+set /p loginoption=Please selected the database login option: 
+if '%loginoption%'=='1' goto customercredentials
+if '%loginoption%'=='2' goto temporarycredentials
+if '%loginoption%'=='3' goto singleuser
+
+
+
+:pauza
+echo.
+echo.
+ECHO Octav was paused, please verify output and press any key to continue...
+echo.
+echo.
+pause >nul
+goto :eof
+
+
+:run_query
+
+ECHO === DEBUG ===
+ECHO PARAM 1: %~1
+ECHO PARAM 2: %~2
+ECHO === DEBUG ===
+ECHO.
+ECHO.
+
+@set login_type=%~1
+@set querytorun="%~2"
+@set sqlcmdparams="%~3"
+if '%login_type%'=='1' call :customercredentials_query %querytorun% %sqlcmdparams%
+if '%login_type%'=='2' call :temporarycredentials_query %querytorun% %sqlcmdparams%
+if '%login_type%'=='3' call :singleuser_query %querytorun% %sqlcmdparams%
+call :pauza
+goto :eof
+
+
+:customercredentials_query
+ECHO === DEBUG ===
+echo.
+echo sqlcmd -S localhost\SQLEXPRESS -U %username% -P %password% -Q "%~1" %~2
+echo.
+ECHO === DEBUG ===
+echo.
+echo.
+sqlcmd -S localhost\SQLEXPRESS -U %username% -P %password% -Q "%~1" %~2
+goto :eof
+
+:singleuser_query
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS /m
+sqlcmd -S localhost\SQLEXPRESS -Q "%~1"
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS
+goto :eof
+
+:temporarycredentials_query
+sqlcmd -S localhost\SQLEXPRESS -U %username% -P %password% -Q "%~1"
+goto :eof
+
+
+:customercredentials
+ECHO SQL Login mode: Customer's credentials
+set /p username=Please Insert Database Username: 
+set /p password=Please Insert Database Password: 
+@SET correct=
+FOR /F %%I IN ('sqlcmd -S localhost\SQLEXPRESS -U %username% -P %password% -Q "set nocount on;select idle from spt_monitor;" -h-1 -W') do @SET correct=%%I
+if not defined correct echo Variable is empty
+goto check_login
+if defined correct echo Variable is %correct%
+pause
+
+
+:check_login
+pause
+if %correct%%1 NEQ +1%1 (goto store_credentials)
+echo "Couldn't login to database with provided credentials" 
+pause
+
+:store_credentials
+ECHO Stored the following creds: Username=%username% and Password=%Password%
+pause
+goto menu_start
+
+
+:temporarycredentials
+ECHO SQL Login mode: Temporary Credentials
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS /m
+sqlcmd -S localhost\SQLEXPRESS -Q 'create login support with password="supp0rt1!"; sp_addsrvrolemember support, sysadmin;'
+net stop mssql$SQLEXPRESS
+net start mssql$SQLEXPRESS
+ECHO Created temporary db user with credentials: username: support; password: supp0rt1!;
+@set username=support
+@set password=supp0rt1!
+pause
+goto menu_start
+
+:singleuser
+::TODO SINGLE USER MODE LOGIN OPTION
+ECHO SQL Login mode: Single User Mode
+goto menu_start
 
 :menu_start
 cls
-echo				OS USER : %username%      %date%      IP  : %_IPAddress%
-echo 					Created by : by Alexandru Creita and Madalin Frangu 
-echo								Version : 1.0                                      
-echo							Simphony Team Bucharest                
-echo							   Oracle Hospitality                
+echo        OS USER : %username%      %date%      IP  : %_IPAddress%
+echo          Created by : by Alexandru Creita and Madalin Frangu 
+echo                Version : 1.0                                      
+echo              Simphony Team Bucharest                
+echo                 Oracle Hospitality                
 echo.                                                       
-echo				  	      THIS SCRIPT CAN BE USED ONLY BY EXPERIENCED ENGINEERS
+echo                  THIS SCRIPT CAN BE USED ONLY BY EXPERIENCED ENGINEERS
 echo.
-echo								Options
-echo          		 -----------------------------------------------------------------
+echo                Options
+echo               -----------------------------------------------------------------
 echo.
-echo						1 - Restart Micros CAL Service
+echo            1 - Restart Micros CAL Service
 echo.
-echo						2 - Restart SQL Service
+echo            2 - Restart SQL Service
 echo.
-echo						3 - Database Tools
+echo            3 - Database Tools
 echo.
-echo						4 - Workstations issues
+echo            4 - Workstations issues
 echo.
-echo						5 - Windows tools
+echo            5 - Windows tools
 echo.
-echo						6 - Workstation  
-echo          		 -----------------------------------------------------------------
+echo            6 - Workstation  
+echo.
+echo               -----------------------------------------------------------------
 echo.
 
 :menu
@@ -67,36 +192,36 @@ goto menu_start
 :DatabaseTools
 echo.
 echo.
-echo				DatabaseTools
+echo        DatabaseTools
 echo.
 echo           -----------------------------------------------------------------
-echo 		Please note that all options with (Admin) will require
-echo			Servicehost and SQL restart.
-echo			Once runned, there will be a workstation downtime
+echo    Please note that all options with (Admin) will require
+echo      Servicehost and SQL restart.
+echo      Once runned, there will be a workstation downtime
 echo.
-echo			1 - Admin login SQL
+echo      1 - Admin login SQL
 echo.
-echo			2 - Backup, drop and create DataStore(Admin)
+echo      2 - Backup, drop and create DataStore(Admin)
 echo.
-echo			3 - Backup, drop and create CheckPostingDB(Admin)
+echo      3 - Backup, drop and create CheckPostingDB(Admin)
 echo.
-echo			4 - Backup, drop and create KDSDataStore(Admin)
+echo      4 - Backup, drop and create KDSDataStore(Admin)
 echo.
-echo			5 - Update CAPS Statistics(Admin)
+echo      5 - Update CAPS Statistics(Admin)
 echo.
-echo			6 - Update DataStore Statistics(Admin)
+echo      6 - Update DataStore Statistics(Admin)
 echo.
-echo			7 - Space used in DataStore(Admin)
+echo      7 - Space used in DataStore(Admin)
 echo.
-echo			8 - Space used in CAPS(Admin)
+echo      8 - Space used in CAPS(Admin)
 echo.
-echo			9 - Mrequests status(Admin)
+echo      9 - Mrequests status(Admin)
 echo.
-echo		       10 - Checks with mrequests status 3 only(Admin)
+echo           10 - Checks with mrequests status 3 only(Admin)
 echo.
-echo		       11 - Force close checks
+echo           11 - Force close checks
 echo.
-echo		       12 - Back to Main Menu
+echo           12 - Back to Main Menu
 echo.
 echo           -----------------------------------------------------------------
 echo.
@@ -121,7 +246,7 @@ if '%optiondb%'=='12' goto back
 :sqlgodmode
 net stop mssql$sqlexpress
 net start mssql$sqlexpress /m
-echo You are now logged in as Administrator to SQL Express.
+echo You are now logged in as Administrator to SQL Express. 
 SQLCMD -S .\SQLExpress
 net stop mssql$sqlexpress
 net start mssql$sqlexpress
@@ -130,88 +255,57 @@ goto menu_start
 
 
 :datastorebdc
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "backup database DataStore to disk ='C:\Micros\DataStoreDB.bak'; drop database datastore; create database DataStore;" -o datastore_operation.log
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
+call :run_query %loginoption% "backup database DataStore to disk ='C:\Micros\DataStoreDB.bak'; drop database datastore; create database DataStore;"
 echo Backup, Drop and recreation of datastore has been performed (C:\Micros\DataStoreDB.bak), please review datastore_operation.log, if any errors are present.
-pause
+call :pauza
 goto menu_start
 
 
 :capsbdc
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "backup database CheckPostingDB to disk ='C:\Micros\CAPSDB.bak'; drop database CheckPostingDB; create database CheckPostingDB;" -o CheckPostingDB_operation.log
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
+call :run_query %loginoption% -Q "backup database CheckPostingDB to disk ='C:\Micros\CAPSDB.bak'; drop database CheckPostingDB; create database CheckPostingDB;" "-o CheckPostingDB_operation.log"
 echo Backup, Drop and recreation of CAPSDB has been performed (C:\Micros\CAPSDB.bak), please review CheckPostingDB_operation.log, if any errors are present.
-pause
 goto menu_start
 
 
 :kdsdatastorebdc
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "backup database KDSDataStore to disk ='C:\Micros\KDSDataStore.bak'; drop database KDSDataStore; create database KDSDataStore;" -o KDSDataStore_operation.log
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
+call :run_query %loginoption% "backup database KDSDataStore to disk ='C:\Micros\KDSDataStore.bak'; drop database KDSDataStore; create database KDSDataStore;" "-o KDSDataStore_operation.log"
 echo Backup, Drop and recreation of KDSDataStore has been performed (C:\Micros\KDSDataStore.bak), please review KDSDataStore_operation.log, if any errors are present.
-pause
 goto menu_start
 
 
 :updateCAPSstatistics
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "update CheckPostingDB.dbo.GLOBAL_PARAMETER set DateVal = getdate() where paramcode = 'LAST_WS_DB_UPDATE_TIME'; " -o CheckPostingDB_operation.log
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
+call :run_query %loginoption% "update CheckPostingDB.dbo.GLOBAL_PARAMETER set DateVal = getdate() where paramcode = 'LAST_WS_DB_UPDATE_TIME'; " "-o CheckPostingDB_operation.log"
 echo CAPS statistics are now up to date.
-pause
 goto menu_start
 
 :updateDatastoreStatistics
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "update DataStore.dbo.GLOBAL_PARAMETER set DateVal = getdate() where paramcode = 'LAST_WS_DB_UPDATE_TIME'; " -o CheckPostingDB_operation.log
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
+call :run_query %loginoption% "update DataStore.dbo.GLOBAL_PARAMETER set DateVal = getdate() where paramcode = 'LAST_WS_DB_UPDATE_TIME'; " "-o CheckPostingDB_operation.log"
 echo CAPS statistics are now up to date.
-pause
 goto menu_start
 
 :spaceusedDatastore
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "sp_spaceused;" -d datastore
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-pause
+call :run_query %loginoption% "sp_spaceused;" "-d datastore"
 goto menu_start
 
 
 :spaceusedCAPS
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "sp_spaceused;" -d checkpostingdb
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-pause
+call :run_query %loginoption% "sp_spaceused;" "-d checkpostingdb"
 goto menu_start
+
+
+::TODO CHECK WHAT THIS DOES, LOOKS USELESS ~MFRANGU
 :back
 goto menu_start
 
 
 :menuviewmrequestsSTS3
 echo.
-echo 		Select the database
+echo    Select the database
 echo           -----------------------------------------------------------------
 echo.
-echo		1 - CAPS
+echo    1 - CAPS
 echo.
-echo		2 - DataStore
+echo    2 - DataStore
 echo.
 echo           -----------------------------------------------------------------
 echo.
@@ -227,31 +321,22 @@ echo.
 
 
 :viewChecksSTS3Datastore
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "use checkpostingdb; select checks.checkid, checks.checknumber, checks.checkopen, checks.checkclose, checks.subtotal, mrequests.reqstate from Checks checks inner join Mrequest_data mrequest_data on checks.checkid = mrequest_data.checkid inner join MRequests mrequests on mrequest_data.rid = mrequests.rid and reqstate = 3; " 
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS 
-pause
+call :run_query %loginoption% "use checkpostingdb; select checks.checkid, checks.checknumber, checks.checkopen, checks.checkclose, checks.subtotal, mrequests.reqstate from Checks checks inner join Mrequest_data mrequest_data on checks.checkid = mrequest_data.checkid inner join MRequests mrequests on mrequest_data.rid = mrequests.rid and reqstate = 3; " 
+
 goto menu_start
 
 :viewChecksSTS3CAPS
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "use checkpostingdb; select checks.checkid, checks.checknumber, checks.checkopen, checks.checkclose, checks.subtotal, mrequests.reqstate from Checks checks inner join Mrequest_data mrequest_data on checks.checkid = mrequest_data.checkid inner join MRequests mrequests on mrequest_data.rid = mrequests.rid and reqstate = 3; " 
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS 
-pause
+call :run_query %loginoption% "use checkpostingdb; select checks.checkid, checks.checknumber, checks.checkopen, checks.checkclose, checks.subtotal, mrequests.reqstate from Checks checks inner join Mrequest_data mrequest_data on checks.checkid = mrequest_data.checkid inner join MRequests mrequests on mrequest_data.rid = mrequests.rid and reqstate = 3; " 
 goto menu_start
 
 
 :mrequests
 echo.
-echo 		Select the database
+echo    Select the database
 echo           -----------------------------------------------------------------
 echo.
-echo		1 - CAPS
-echo		2 - DataStore
+echo    1 - CAPS
+echo    2 - DataStore
 echo.
 echo           -----------------------------------------------------------------
 echo.
@@ -267,47 +352,36 @@ echo.
 
 
 :mrequestsCAPS
-
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "use checkpostingdb;select CONVERT (date ,ReqTime) BusinessDate, case when MREQUESTS.ReqState='0' then 'Pending to Post' when MREQUESTS.ReqState='1' then 'Posted' when MREQUESTS.ReqState='2' then 'Failed Retry Later' when MREQUESTS.ReqState='3' then 'Failed Rejected' end as Enterprise_Posting_Status, ReqState,count (reqstate) as Mrequest_Count from dbo.MREQUESTS group by ReqState,CONVERT (date ,ReqTime) order by CONVERT (date ,ReqTime),ReqState;"
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-pause
+call :run_query %loginoption% "use checkpostingdb;select CONVERT (date ,ReqTime) BusinessDate, case when MREQUESTS.ReqState='0' then 'Pending to Post' when MREQUESTS.ReqState='1' then 'Posted' when MREQUESTS.ReqState='2' then 'Failed Retry Later' when MREQUESTS.ReqState='3' then 'Failed Rejected' end as Enterprise_Posting_Status, ReqState,count (reqstate) as Mrequest_Count from dbo.MREQUESTS group by ReqState,CONVERT (date ,ReqTime) order by CONVERT (date ,ReqTime),ReqState;"
 goto menu_start
 
 
 :mrequestsDataStore
 
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "use datastore;select CONVERT (date ,ReqTime) BusinessDate, case when MREQUESTS.ReqState='0' then 'Pending to Post' when MREQUESTS.ReqState='1' then 'Posted' when MREQUESTS.ReqState='2' then 'Failed Retry Later' when MREQUESTS.ReqState='3' then 'Failed Rejected' end as Enterprise_Posting_Status, ReqState,count (reqstate) as Mrequest_Count from dbo.MREQUESTS group by ReqState,CONVERT (date ,ReqTime) order by CONVERT (date ,ReqTime),ReqState;"
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-pause
+call :run_query %loginoption% "use datastore;select CONVERT (date ,ReqTime) BusinessDate, case when MREQUESTS.ReqState='0' then 'Pending to Post' when MREQUESTS.ReqState='1' then 'Posted' when MREQUESTS.ReqState='2' then 'Failed Retry Later' when MREQUESTS.ReqState='3' then 'Failed Rejected' end as Enterprise_Posting_Status, ReqState,count (reqstate) as Mrequest_Count from dbo.MREQUESTS group by ReqState,CONVERT (date ,ReqTime) order by CONVERT (date ,ReqTime),ReqState;"
 goto menu_start
 
 
 :WorkstationIssues
 
 echo.
-echo 		Workstation Issues
+echo    Workstation Issues
 echo.
 echo           -----------------------------------------------------------------
 echo.
-echo		1 - Hexadecimal value 
+echo    1 - Hexadecimal value 
 echo.
-echo		2 - Add web.config reload database lines
+echo    2 - Add web.config reload database lines
 echo.
-echo		3 - Remove from web.config reload database lines
+echo    3 - Remove from web.config reload database lines
 echo.
-echo		4 - Recreate secdata.bin and authenticate
+echo    4 - Recreate secdata.bin and authenticate
 echo.
-echo		5 - Synch Anchors and DBSettings update
+echo    5 - Synch Anchors and DBSettings update
 echo.
-echo		6 - Extension application not found: Opera
+echo    6 - Extension application not found: Opera
 echo.
-echo		7 - Back
+echo    7 - Back
 echo.
 echo           -----------------------------------------------------------------
 echo.
@@ -393,9 +467,7 @@ goto menu_start
 :synchanchors
 SET currentpath=%cd%
 ECHO Note, this procedure will enable the datastoredb SQL user and set a temporary password [datastoredb], once Simphony is started, it will fetch the database credentials set as in EMC.
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "alter login datastoredb enable; alter login datastoredb with password = 'datastoredb';"
+call :run_query %loginoption% "alter login datastoredb enable; alter login datastoredb with password = 'datastoredb';"
 copy NUL DbSettings.xml
 echo ^<root^> >> DbSettings.xml
 echo ^<db alias="LocalDb" dbType="sqlserver" dataSource="localhost\SQLEXPRESS" catalog="DataStore" uid="datastoredb" pwd="datastoredb" replaceviews="TRUE" /^> >> DbSettings.xml
@@ -435,43 +507,43 @@ goto menu_start
 :Windowstools
 
 echo.
-echo 		Windows Tools
+echo    Windows Tools
 echo.
 echo           -----------------------------------------------------------------
 echo.
-echo			1 - Provide full permissions over the Micros registry 
+echo      1 - Provide full permissions over the Micros registry 
 echo.
-echo			2 - Provide full permissions over the Micros folder and SQLEXPRESS
+echo      2 - Provide full permissions over the Micros folder and SQLEXPRESS
 echo.
-echo			3 - TCP Transmissions = 8 (reload db issues
+echo      3 - TCP Transmissions = 8 (reload db issues
 echo.
-echo			4 - View last SQL log
+echo      4 - View last SQL log
 echo.
-echo			5 - Disable Windows Firewall and advanced firewall
+echo      5 - Disable Windows Firewall and advanced firewall
 echo.
-echo			6 - Disable "Firewall is off" notification
+echo      6 - Disable "Firewall is off" notification
 echo.
-echo			7 - Lower down User Account Control
+echo      7 - Lower down User Account Control
 echo.
-echo			8 - View last Egateway log
+echo      8 - View last Egateway log
 echo.
-echo			9 - View web.config
+echo      9 - View web.config
 echo.
-echo	   		10 - View Servicehost.xml
+echo        10 - View Servicehost.xml
 echo.
-echo	   		11 - View Simphonyinstall.xml
+echo        11 - View Simphonyinstall.xml
 echo.
-echo	  		12 - View DbSettings.xml
+echo        12 - View DbSettings.xml
 echo.
-echo	   		13 - View Hosts file
+echo        13 - View Hosts file
 echo.
-echo	   		14 - Adjust regional settings - English
+echo        14 - Adjust regional settings - English
 echo.
-echo	  		15 - Enable auto logon
+echo        15 - Enable auto logon
 echo.
-echo	  		16 - Enable local Administrator
+echo        16 - Enable local Administrator
 echo.
-echo	  		17 - Back
+echo        17 - Back
 echo.
 echo           -----------------------------------------------------------------
 echo.
@@ -500,12 +572,12 @@ echo.
 
 
 :enablelocaladmin
-net user administrator /active:yes	
+net user administrator /active:yes  
 net user Administrator Welcome1!
 echo.
 echo  Local Administrator is now enabled. Password: Welcome1!
 echo.
-Pause						 
+Pause            
 goto Windowstools
 
 :enableautologon
@@ -513,8 +585,8 @@ control userpasswords2
 netplwiz
 goto Windowstools
 :adjustregionalsettings
-:: start regional settings app:								 
-echo starting Microsoft Regional settings							 
+:: start regional settings app:                
+echo starting Microsoft Regional settings              
 control intl.cpl
 goto Windowstools
 
@@ -539,7 +611,7 @@ echo C:\Micros
 echo C:\Program Files\MICROS
 echo C:\Program Files\Microsoft SQL Server\MSSQL10_50.SQLEXPRESS
 echo.
-Pause											 
+Pause                      
 goto Windowstools
 
 
@@ -600,13 +672,13 @@ goto Windowstools
 
 
 :viewEgateway
-echo Opening last Egateway log file..
+echo Opening last Egateway log file...
 start notepad "C:\Micros\Simphony\Webserver\wwwroot\Egateway\Egatewaylog\LOG_%ComputerName%.txt"
 pause
 goto Windowstools
 
 :viewWebconfig
-echo Opening web.config..
+echo Opening web.config...
 start notepad "C:\Micros\Simphony\Webserver\wwwroot\Egateway\web.config.txt"
 pause
 goto Windowstools
@@ -617,27 +689,27 @@ goto Windowstools
 
 :viewServicehostxml
 
-echo Opening web.config..
+echo Opening ServiceHost file...
 start notepad "C:\Micros\Simphony\servicehost.xml"
 pause
 goto Windowstools
 
 
 :viewSimphonyinstall
-echo Opening web.config..
+echo Opening SimhponyInstall file...
 start notepad "C:\Micros\Simphony\Webserver\Simphonyinstall.xml"
 pause
 goto Windowstools
 
 :viewDbSettings
-echo Opening last Egateway log file..
+echo Opening last DbSettings file..
 start notepad "C:\Micros\Simphony\Webserver\wwwroot\Egateway\DBSettings.xml"
 pause
 goto Windowstools
 
 
 :viewHostsfile
-echo Opening last Egateway log file..
+echo Opening Hosts file..
 start notepad "C:\Windows\System32\drivers\etc\hosts"
 pause
 goto Windowstools
@@ -645,11 +717,11 @@ goto Windowstools
 
 :closechecks
 echo.
-echo 			Select the database
+echo      Select the database
 echo           -----------------------------------------------------------------
 echo.
-echo			1 - CAPS
-echo			2 - DataStore
+echo      1 - CAPS
+echo      2 - DataStore
 echo.
 echo           -----------------------------------------------------------------
 echo.
@@ -664,27 +736,27 @@ echo.
 echo.
 
 :checkclosebyidCAPS
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
 :viewcheckscaps
-sqlcmd -S localhost\SQLEXPRESS -Q "select checkid, checknumber, checkopen, checkclose subtotal from checkpostingdb.dbo.checks where checkclose is null"
-set /p checkid=checkid of check you want to close or type quit:
+call :run_query %loginoption% "select checkid, checknumber, checkopen, checkclose subtotal from checkpostingdb.dbo.checks where checkclose is null"
+ECHO.
+set /p checkid=checkid of check you want to close or type quit: 
+ECHO.
 if "%checkid%"=="quit" goto quit
-sqlcmd -S localhost\SQLEXPRESS -Q "update checkpostingdb.dbo.checks set checkclose = checkopen, closestatus=2 where checkid = %checkid%"
+call :run_query %loginoption% "update checkpostingdb.dbo.checks set checkclose = checkopen, closestatus=2 where checkid = %checkid%"
 goto viewcheckscaps
+
 :checkclosebyiddatastore
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
 :viewchecksdatastore
-sqlcmd -S localhost\SQLEXPRESS -Q "select checkid, checknumber, checkopen, checkclose subtotal from DataStore.dbo.checks where checkclose is null"
-set /p checkid=checkid of check you want to close or type quit:
+call :run_query %loginoption% "select checkid, checknumber, checkopen, checkclose subtotal from DataStore.dbo.checks where checkclose is null"
+ECHO.
+set /p checkid=checkid of check you want to close or type quit: 
+ECHO.
 if "%checkid%"=="quit" goto quit
-sqlcmd -S localhost\SQLEXPRESS -Q "update DataStore.dbo.checks set checkclose = checkopen, closestatus=2 where checkid = %checkid%"
+call :run_query %loginoption% "update DataStore.dbo.checks set checkclose = checkopen, closestatus=2 where checkid = %checkid%"
 goto viewchedatastore
+
 :quit
 echo checks closed and menu quitted
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
 REM C:\Micros\Simphony\WebServer\ServiceHost.exe
 goto DatabaseTools
 
@@ -714,35 +786,17 @@ if '%wintoolschoice%'=='4' goto FindInterfacesInfo
 
 
 :findALLPrinters
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "select string_table.StringText as PrinterName, printer.connectionString as PrinterType, printer.configurationstring as PrinterDetails, service_host.hostname as PrintControllerIP, str.stringtext as PrintControllerHostname from datastore.dbo.string_table string_table join datastore.dbo.printer printer on string_table.stringnumberid = printer.nameid join datastore.dbo.service service on printer.serviceid = service.serviceid join datastore.dbo.service_host service_host on service.servicehostid = service_host.servicehostid join datastore.dbo.string_table str on service_host.nameid = str.stringnumberid" -W
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-pause
+call :run_query %loginoption% "select string_table.StringText as PrinterName, printer.connectionString as PrinterType, printer.configurationstring as PrinterDetails, service_host.hostname as PrintControllerIP, str.stringtext as PrintControllerHostname from datastore.dbo.string_table string_table join datastore.dbo.printer printer on string_table.stringnumberid = printer.nameid join datastore.dbo.service service on printer.serviceid = service.serviceid join datastore.dbo.service_host service_host on service.servicehostid = service_host.servicehostid join datastore.dbo.string_table str on service_host.nameid = str.stringnumberid" "-W"
 goto WorkstationTools
 
 :FindEmployeesInfo
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "select e.username, e.firstname, e.lastname, e.idnumber as SimphonyCode, string_table.Stringtext as RoleName  from datastore.dbo.employee e join datastore.dbo.role_employee er on e.employeeid = er.employeeid join datastore.dbo.role role_table on er.roleid = role_table.roleid join datastore.dbo.string_table string_table on string_table.stringnumberid = role_table.nameid" -W -s "|"
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-pause
+call :run_query %loginoption% "select e.username, e.firstname, e.lastname, e.idnumber as SimphonyCode, string_table.Stringtext as RoleName  from datastore.dbo.employee e join datastore.dbo.role_employee er on e.employeeid = er.employeeid join datastore.dbo.role role_table on er.roleid = role_table.roleid join datastore.dbo.string_table string_table on string_table.stringnumberid = role_table.nameid" "-W -s '|'"
 goto WorkstationTools
 
 :FindWorkstationsInfo
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "select st2.stringtext 'Property', st.StringText 'WS Name',  sh.HostName 'WS IP Address/Hostname',  sh.NetMask 'WS Subnet', sh.DefaultGateway 'WS Default Gateway', st3.stringtext 'RevenueCenters' from datastore.dbo.WORKSTATION ws join datastore.dbo.SERVICE s on ws.ServiceID = s.ServiceID join datastore.dbo.SERVICE_HOST sh on s.ServiceHostID = sh.ServiceHostID join datastore.dbo.string_table st on sh.NameID = st.stringnumberid join datastore.dbo.HIERARCHY_STRUCTURE hs on ws.HierStrucID = hs.HierStrucID join datastore.dbo.HIERARCHY_UNIT hu on hs.HierUnitID = hu.HierUnitID join datastore.dbo.string_table st2 on hu.NameID = st2.stringnumberid join datastore.dbo.WORKSTATION_REV_CTR_TOUCHSCRN wrct  on ws.WorkstationID = wrct.WorkstationID join datastore.dbo.HIERARCHY_UNIT hu2 on hu2.RevCtrID = wrct.RevCtrID join datastore.dbo.STRING_TABLE st3 on hu2.NameID = st3.StringNumberID" -W
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS
-Pause
+call :run_query %loginoption% "select st2.stringtext 'Property', st.StringText 'WS Name',  sh.HostName 'WS IP Address/Hostname',  sh.NetMask 'WS Subnet', sh.DefaultGateway 'WS Default Gateway', st3.stringtext 'RevenueCenters' from datastore.dbo.WORKSTATION ws join datastore.dbo.SERVICE s on ws.ServiceID = s.ServiceID join datastore.dbo.SERVICE_HOST sh on s.ServiceHostID = sh.ServiceHostID join datastore.dbo.string_table st on sh.NameID = st.stringnumberid join datastore.dbo.HIERARCHY_STRUCTURE hs on ws.HierStrucID = hs.HierStrucID join datastore.dbo.HIERARCHY_UNIT hu on hs.HierUnitID = hu.HierUnitID join datastore.dbo.string_table st2 on hu.NameID = st2.stringnumberid join datastore.dbo.WORKSTATION_REV_CTR_TOUCHSCRN wrct  on ws.WorkstationID = wrct.WorkstationID join datastore.dbo.HIERARCHY_UNIT hu2 on hu2.RevCtrID = wrct.RevCtrID join datastore.dbo.STRING_TABLE st3 on hu2.NameID = st3.StringNumberID" "-W"
 goto WorkstationTools
 
 :FindInterfacesInfo
-net stop mssql$SQLEXPRESS
-net start mssql$SQLEXPRESS /m
-sqlcmd -S localhost\SQLEXPRESS -Q "select interface.interfaceid, interface.timeout as TIMEOUT, interface.tcphost as IP, interface.tcpport as PORT, interface.interfacetype as TYPE, string_table.stringtext as NAME, service_host.hostname as Controller from datastore.dbo.Interface interface join datastore.dbo.string_table string_table on interface.nameid = string_table.stringnumberid join datastore.dbo.Service service on interface.serviceid = service.serviceid join datastore.dbo.Service_host service_host on service.servicehostid = service_host.servicehostid" -W -s "|"
-pause
+call :run_query %loginoption% "select interface.interfaceid, interface.timeout as TIMEOUT, interface.tcphost as IP, interface.tcpport as PORT, interface.interfacetype as TYPE, string_table.stringtext as NAME, service_host.hostname as Controller from datastore.dbo.Interface interface join datastore.dbo.string_table string_table on interface.nameid = string_table.stringnumberid join datastore.dbo.Service service on interface.serviceid = service.serviceid join datastore.dbo.Service_host service_host on service.servicehostid = service_host.servicehostid" "-W -s '|'"
 goto WorkstationTools
