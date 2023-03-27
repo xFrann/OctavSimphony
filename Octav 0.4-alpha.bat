@@ -10,7 +10,7 @@ color 0C
 :menu_start
 cls
 echo				OS USER : %username%      %date%      IP  : %_IPAddress%
-echo 					Created by : by Alexandru Creita and Madalin Frangu 
+echo 					Created by : AC & MF
 echo								Version : 1.0                                      
 echo							Simphony Team Bucharest                
 echo							   Oracle Hospitality                
